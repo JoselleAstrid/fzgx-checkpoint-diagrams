@@ -320,9 +320,11 @@ class Diagram():
                 if self.status.number_distance > 0:
                     label_distance = (
                         self.status.number_distance + half_track_width)
+                    side_track_is_on = 'left'
                 else:
                     label_distance = (
                         self.status.number_distance - half_track_width)
+                    side_track_is_on = 'right'
                     
                 if base_plane_length > 0 or base_plane_length < 0:
                     label_3d_distance = (label_distance
@@ -341,8 +343,12 @@ class Diagram():
                         color=c['color'],
                         # Font size
                         size=self.status.number_size,
-                        # Put the center of the text at this position
-                        horizontalalignment='center',
+                        # Base the position on the side of the text, not the
+                        # center. This way, 1 digit and 3 digit numbers
+                        # are the same distance from the side of the track.
+                        # And it generally reduces instances where the text is
+                        # struck-through by extended checkpoint lines.
+                        horizontalalignment=side_track_is_on,
                         # Put the bottom of the text at this position.
                         # This generally reduces instances where the text is
                         # struck-through by extended checkpoint lines.
