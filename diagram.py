@@ -4,6 +4,8 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.colors import hsv_to_rgb, rgb2hex
 from matplotlib.figure import Figure
 
+from PyQt5.QtCore import Qt
+
     
 # Coordinates
 def x_coord(lateral_offset, check):
@@ -65,7 +67,15 @@ class Diagram():
         # https://stackoverflow.com/a/6377406/
         self.axes = self.figure.add_axes([0, 0, 1, 1])
         
+        # Make it possible to focus on the canvas by clicking on it.
+        # This allows the canvas to capture keypresses.
+        # https://stackoverflow.com/questions/22043549/
+        # http://doc.qt.io/qt-5/qt.html#FocusPolicy-enum
+        self.canvas.setFocusPolicy(Qt.ClickFocus)
+        
+        self.canvas.setCursor(Qt.OpenHandCursor)
         self.drag_position = None
+        
         self.canvas.mpl_connect(
             'button_press_event', self.button_press_event)
         self.canvas.mpl_connect(
@@ -113,11 +123,13 @@ class Diagram():
         # Start pan
         #print(f'Button press: {event.x}, {event.y}, {event.button}')
         self.drag_position = (event.x, event.y)
+        self.canvas.setCursor(Qt.ClosedHandCursor)
         
     def button_release_event(self, event):
         # End pan
         #print(f'Button release: {event.x}, {event.y}, {event.button}')
         self.drag_position = None
+        self.canvas.setCursor(Qt.OpenHandCursor)
         
     def motion_notify_event(self, event):
         # If mouse button pressed, pan the figure
