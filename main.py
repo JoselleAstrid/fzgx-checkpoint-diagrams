@@ -228,25 +228,26 @@ class MainWidget(QWidget):
         hbox.addStretch(1)
         vbox.addLayout(hbox)
         
+        self.error_label = QLabel("")
+        self.error_label.setStyleSheet("QLabel { color: red; }")
+        self.error_label.setFixedHeight(char_height)
+        vbox.addWidget(self.error_label)
+        
         hbox = QHBoxLayout()
         self.update_button = QPushButton("Update diagram")
         self.update_button.setFixedWidth(120)
         self.update_button.clicked.connect(
             self.update_diagram, self.signal_type)
         hbox.addWidget(self.update_button)
-        hbox.addStretch(1)
-        vbox.addLayout(hbox)
-        
-        self.error_label = QLabel("")
-        self.error_label.setStyleSheet("QLabel { color: red; }")
-        self.error_label.setFixedHeight(char_height)
-        vbox.addWidget(self.error_label)
         
         self.coords_label = QLabel("")
         self.coords_label.setFixedHeight(char_height)
+        hbox.addWidget(self.coords_label)
+        hbox.addStretch(1)
+        vbox.addLayout(hbox)
+        
         self.diagram = Diagram(self.status, self.coords_label)
         vbox.addWidget(self.diagram.canvas)
-        vbox.addWidget(self.coords_label)
         
         hbox = QHBoxLayout()
         self.save_button = QPushButton("Save image")
