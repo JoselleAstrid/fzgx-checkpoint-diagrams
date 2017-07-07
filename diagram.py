@@ -73,6 +73,8 @@ class Diagram():
         self.canvas.mpl_connect(
             'motion_notify_event', self.motion_notify_event)
         self.canvas.mpl_connect(
+            'key_press_event', self.key_press_event)
+        self.canvas.mpl_connect(
             'scroll_event', self.scroll_event)
         self.canvas.mpl_connect(
             'resize_event', self.resize_event)
@@ -141,14 +143,24 @@ class Diagram():
         self.coords_label.setText(f'{coord_1_str}, {coord_2_str}')
             
     def scroll_event(self, event):
-        # Zoom in/out
         #print(f'Scroll: {event.x}, {event.y}, {event.step}')
         if event.step > 0:
-            # Scroll up -> zoom in
+            # Scroll up -> zoom in on the current mouse position
             self.zoom_in(event.x, event.y)
         else:
-            # Scroll down -> zoom out
+            # Scroll down -> zoom out from the current mouse position
             self.zoom_out(event.x, event.y)
+            
+    def key_press_event(self, event):
+        #print(f'Key press: {event.key}')
+        if event.key == 'up':
+            # Up arrow -> zoom in on the diagram center
+            canvas_width, canvas_height = self.canvas.get_width_height()
+            self.zoom_in(canvas_width / 2, canvas_height / 2)
+        elif event.key == 'down':
+            # Down arrow -> zoom out from the diagram center
+            canvas_width, canvas_height = self.canvas.get_width_height()
+            self.zoom_out(canvas_width / 2, canvas_height / 2)
             
     def resize_event(self, event):
         # Canvas is resized

@@ -248,6 +248,11 @@ class MainWidget(QWidget):
         
         self.diagram = Diagram(self.status, self.coords_label)
         vbox.addWidget(self.diagram.canvas)
+        # Make it possible to focus on the canvas by clicking on it.
+        # This allows the canvas to capture keypresses.
+        # https://stackoverflow.com/questions/22043549/
+        # http://doc.qt.io/qt-5/qt.html#FocusPolicy-enum
+        self.diagram.canvas.setFocusPolicy(Qt.ClickFocus)
         
         hbox = QHBoxLayout()
         self.save_button = QPushButton("Save image")
