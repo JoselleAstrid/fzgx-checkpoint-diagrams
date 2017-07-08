@@ -256,6 +256,13 @@ class MainWidget(QWidget):
             self.on_save_button_click, self.signal_type)
         hbox.addWidget(self.save_button)
         
+        self.rectangle_select_button = QPushButton("Rectangle")
+        self.rectangle_select_button.setToolTip(
+            "Select an area of the diagram to save as an image.")
+        self.rectangle_select_button.clicked.connect(
+            self.diagram.activate_rectangle_select, self.signal_type)
+        hbox.addWidget(self.rectangle_select_button)
+        
         label = QLabel("DPI:")
         label.setToolTip(
             "Dots per inch to use for saving. You can use this to adjust the"
@@ -268,8 +275,6 @@ class MainWidget(QWidget):
         hbox.addWidget(self.save_dpi_line_edit)
         hbox.addStretch(1)
         vbox.addLayout(hbox)
-        
-        # TODO: Rectangle select tool
         
         self.save_error_label = QLabel("")
         self.save_error_label.setStyleSheet("QLabel { color: red; }")

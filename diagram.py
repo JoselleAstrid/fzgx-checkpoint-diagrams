@@ -3,8 +3,10 @@ import math
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.colors import hsv_to_rgb, rgb2hex
 from matplotlib.figure import Figure
+from matplotlib.transforms import Bbox
 
 from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import QRubberBand
 
     
 # Coordinates
@@ -50,7 +52,6 @@ def get_point_position_function(coord_str):
 
 class Diagram():
     
-    drag_position = None
     zoom_factor = 1.2
     
     def __init__(self, status, coords_label):
@@ -75,6 +76,9 @@ class Diagram():
         
         self.canvas.setCursor(Qt.OpenHandCursor)
         self.drag_position = None
+        
+        self.rectangle_select_interaction = None
+        self.rect_rubberband = QRubberBand(QRubberBand.Rectangle, self.canvas)
         
         self.canvas.mpl_connect(
             'button_press_event', self.button_press_event)
@@ -110,6 +114,13 @@ class Diagram():
             self.axes.set_ylim(old_axes_ylim)
         
         self.canvas.draw()
+        
+        self.deactivate_rectangle_select()
+        
+    def canvas_width(self):
+        return self.canvas.get_width_height()[0]
+    def canvas_height(self):
+        return self.canvas.get_width_height()[1]
             
     def convert_coords_canvas_to_game(self, x, y):
         xlim = self.axes.get_xlim()
@@ -120,18 +131,28 @@ class Diagram():
             ylim[0] + (ylim[1] - ylim[0])*(y / canvas_height))
     
     def button_press_event(self, event):
-        # Start pan
-        #print(f'Button press: {event.x}, {event.y}, {event.button}')
-        self.drag_position = (event.x, event.y)
-        self.canvas.setCursor(Qt.ClosedHandCursor)
+        # Mouse button press
+        self.rectangle_select_button_press_event(event)
+        
+        if not self.rectangle_select_interaction:
+            # Start pan
+            #print(f'Button press: {event.x}, {event.y}, {event.button}')
+            self.drag_position = (event.x, event.y)
+            self.canvas.setCursor(Qt.ClosedHandCursor)
         
     def button_release_event(self, event):
+        # Mouse button release
+        self.rectangle_select_button_release_event(event)
+            
         # End pan
         #print(f'Button release: {event.x}, {event.y}, {event.button}')
         self.drag_position = None
         self.canvas.setCursor(Qt.OpenHandCursor)
         
     def motion_notify_event(self, event):
+        # Mouse motion
+        self.rectangle_select_motion_notify_event(event)
+            
         # If mouse button pressed, pan the figure
         #print(f'Motion: {event.x}, {event.y}')
         if self.drag_position:
@@ -155,6 +176,7 @@ class Diagram():
         self.coords_label.setText(f'{coord_1_str}, {coord_2_str}')
             
     def scroll_event(self, event):
+        # Mousewheel scrolling
         #print(f'Scroll: {event.x}, {event.y}, {event.step}')
         if event.step > 0:
             # Scroll up -> zoom in on the current mouse position
@@ -254,6 +276,59 @@ class Diagram():
         
     def zoom_out(self, x, y):
         self.zoom(x, y, False)
+        
+    def activate_rectangle_select(self):
+        self.rect_rubberband.setGeometry(0, 0, 0, 0)
+        self.rect_rubberband.show()
+        self.save_rectangle = None
+        self.canvas.setCursor(Qt.CrossCursor)
+        self.rectangle_select_interaction = 'ready'
+        
+    def deactivate_rectangle_select(self):
+        self.rect_rubberband.hide()
+        self.save_rectangle = None
+        self.canvas.setCursor(Qt.OpenHandCursor)
+        self.rectangle_select_interaction = None
+        
+    def rectangle_select_button_press_event(self, event):
+        # Mouse button press
+        if self.rectangle_select_interaction == 'ready':
+            # Start drawing rectangle.
+            # Rectangle dimensions have opposite direction y from
+            # event/canvas dimensions
+            self.rectangle_select_origin_x = event.x
+            self.rectangle_select_origin_y = event.y
+            self.rectangle_select_interaction = 'drawing'
+        else:
+            self.deactivate_rectangle_select()
+            
+    def rectangle_select_motion_notify_event(self, event):
+        # Mouse motion
+        if self.rectangle_select_interaction == 'drawing':
+            # Change the rectangle shape according to the mouse position.
+            #
+            # 1. Rect rubberband dimensions have opposite direction y from
+            # event/canvas dimensions
+            # 2. setGeometry() only works when the sizes are positive
+            # As a result, setting the geometry is a bit messy.
+            self.rect_rubberband.setGeometry(
+                min(self.rectangle_select_origin_x, event.x),
+                min(
+                    self.canvas_height() - self.rectangle_select_origin_y,
+                    self.canvas_height() - event.y),
+                abs(self.rectangle_select_origin_x - event.x),
+                abs(self.rectangle_select_origin_y - event.y))
+        
+    def rectangle_select_button_release_event(self, event):
+        # Mouse button release
+        if self.rectangle_select_interaction == 'drawing':
+            # Finish rectangle
+            self.save_rectangle = (
+                (self.rectangle_select_origin_x,
+                 self.rectangle_select_origin_y),
+                (event.x, event.y))
+            self.rectangle_select_interaction = None
+            #print(self.save_rectangle)
         
     def draw_checkpoints(self):
         
@@ -472,10 +547,23 @@ class Diagram():
         # print(f"axes range sizes: {hrange}, {vrange}")
         # print(f"xlim: {self.axes.get_xlim()}")
         # print(f"ylim: {self.axes.get_ylim()}")
+            
         
     def save(self, filepath):
-        # TODO: Allow rectangle select to specify save area. This probably
-        # involves the bbox_inches kwarg.
+        if self.save_rectangle:
+            # We've specified a specific region of the diagram to save.
+            dpi = self.status.dpi
+            # save_rectangle is in canvas pixels; need to convert to inches
+            bbox_inches = Bbox([
+                (min(self.save_rectangle[0][0], self.save_rectangle[1][0])/dpi,
+                min(self.save_rectangle[0][1], self.save_rectangle[1][1])/dpi),
+                (max(self.save_rectangle[0][0], self.save_rectangle[1][0])/dpi,
+                max(self.save_rectangle[0][1], self.save_rectangle[1][1])/dpi),
+            ])
+        else:
+            # Save the whole diagram.
+            bbox_inches = None
+            
         self.figure.savefig(
             filepath,
             # Force PNG format; JPEG is not supported by our MPL backend
@@ -485,5 +573,6 @@ class Diagram():
             # image file. Font size, line thickness, etc. should be the same
             # as seen in the figure canvas.
             dpi=self.status.save_dpi,
+            bbox_inches=bbox_inches,
         )
 
