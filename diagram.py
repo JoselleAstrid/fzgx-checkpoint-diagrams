@@ -226,6 +226,9 @@ class Diagram():
         self.axes.set_xlim(axes_hmin, axes_hmax)
         self.axes.set_ylim(axes_vmin, axes_vmax)
         
+        # Rectangle can get wonky after a canvas resize, so just erase it
+        self.deactivate_rectangle_select()
+        
             
     def pan(self, change_x, change_y):
         canvas_width, canvas_height = self.canvas.get_width_height()
@@ -306,27 +309,49 @@ class Diagram():
         # Mouse motion
         if self.rectangle_select_interaction == 'drawing':
             # Change the rectangle shape according to the mouse position.
-            #
+            canvas_width, canvas_height = self.canvas.get_width_height()
+            
+            # If the mouse is outside of the canvas boundary, snap the
+            # rectangle to the boundary
+            event_x_bounded = event.x
+            event_x_bounded = max(event_x_bounded, 0)
+            event_x_bounded = min(event_x_bounded, canvas_width)
+            event_y_bounded = event.y
+            event_y_bounded = max(event_y_bounded, 0)
+            event_y_bounded = min(event_y_bounded, canvas_height)
+            
             # 1. Rect rubberband dimensions have opposite direction y from
-            # event/canvas dimensions
-            # 2. setGeometry() only works when the sizes are positive
-            # As a result, setting the geometry is a bit messy.
+            # event/canvas dimensions, so need to do canvas height minus
+            # event y
+            # 2. setGeometry() only works when the sizes are positive, so need
+            # to start with the lower coordinates and ensure positive sizes
             self.rect_rubberband.setGeometry(
-                min(self.rectangle_select_origin_x, event.x),
+                min(self.rectangle_select_origin_x, event_x_bounded),
                 min(
-                    self.canvas_height() - self.rectangle_select_origin_y,
-                    self.canvas_height() - event.y),
-                abs(self.rectangle_select_origin_x - event.x),
-                abs(self.rectangle_select_origin_y - event.y))
+                    canvas_height - self.rectangle_select_origin_y,
+                    canvas_height - event_y_bounded),
+                abs(self.rectangle_select_origin_x - event_x_bounded),
+                abs(self.rectangle_select_origin_y - event_y_bounded))
         
     def rectangle_select_button_release_event(self, event):
         # Mouse button release
         if self.rectangle_select_interaction == 'drawing':
-            # Finish rectangle
+            # Finish the rectangle.
+            
+            # If the mouse is outside of the canvas boundary, snap the
+            # rectangle to the boundary
+            canvas_width, canvas_height = self.canvas.get_width_height()
+            event_x_bounded = event.x
+            event_x_bounded = max(event_x_bounded, 0)
+            event_x_bounded = min(event_x_bounded, canvas_width)
+            event_y_bounded = event.y
+            event_y_bounded = max(event_y_bounded, 0)
+            event_y_bounded = min(event_y_bounded, canvas_height)
+            
             self.save_rectangle = (
                 (self.rectangle_select_origin_x,
                  self.rectangle_select_origin_y),
-                (event.x, event.y))
+                (event_x_bounded, event_y_bounded))
             self.rectangle_select_interaction = None
             #print(self.save_rectangle)
         
