@@ -68,12 +68,104 @@ def add_checkpoint_colors(checkpoints):
     
     
 class Status():
-    """Some status variables shared between MainWidget and Diagram."""
-    def __init__(self):
+    """
+    Some status variables and interface shared between MainWidget and Diagram.
+    
+    The goal is that MainWidget and Diagram shouldn't grab each other's stuff 
+    directly all the time. We'll try to keep most of the messy interfacing
+    here in Status.
+    """
+    def __init__(self, main_widget, diagram):
+        self.main_widget = main_widget
+        self.diagram = diagram
+        self.main_widget.status = self
+        self.diagram.status = self
+        
         self.course_code = None
         self.course_code_changed = False
         self.checkpoints = None
         self.data_path_points = None
+        
+    @property
+    def save_dpi(self):
+        return self._save_dpi
+    
+    def save_dpi_set_directly(self, new_save_dpi):
+        # Set the value
+        self._save_dpi = new_save_dpi
+        # Set the field text
+        self.main_widget.save_dpi_line_edit.setText(str(new_save_dpi))
+        
+        # After editing, ensure we see the beginning of the text, rather than
+        # a bunch of insignificant decimal places
+        self.main_widget.save_dpi_line_edit.setCursorPosition(0)
+            
+    def save_dpi_set_from_field(self):
+        try:
+            self._save_dpi = float(self.main_widget.save_dpi_line_edit.text())
+        except ValueError:
+            # Not a valid DPI; reset the field to the previous value
+            self.main_widget.save_dpi_line_edit.setText(str(self._save_dpi))
+            
+        # After editing, ensure we see the beginning of the text, rather than
+        # a bunch of insignificant decimal places
+        self.main_widget.save_dpi_line_edit.setCursorPosition(0)
+        
+    @property
+    def save_width(self):
+        return self._save_width
+    
+    def save_width_set_directly(self, new_save_width):
+        # Set the value
+        self._save_width = new_save_width
+        # Set the field text
+        self.main_widget.save_width_line_edit.setText(str(new_save_width))
+            
+    def save_width_set_from_field(self):
+        try:
+            self._save_width = int(round(float(
+                self.main_widget.save_width_line_edit.text())))
+        except ValueError:
+            pass
+        
+        # Internal value -> text field value.
+        # If we got a valid width, this ensures the text shows an integer.
+        # If we got an invalid width, this resets to the previous value.
+        self.main_widget.save_width_line_edit.setText(
+            str(self._save_width))
+        
+    @property
+    def save_height(self):
+        return self._save_height
+    
+    def save_height_set_directly(self, new_save_height):
+        # Set the value
+        self._save_height = new_save_height
+        # Set the field text
+        self.main_widget.save_height_line_edit.setText(str(new_save_height))
+            
+    def save_height_set_from_field(self):
+        try:
+            self._save_height = int(round(float(
+                self.main_widget.save_height_line_edit.text())))
+        except ValueError:
+            pass
+        
+        # Internal value -> text field value.
+        # If we got a valid height, this ensures the text shows an integer.
+        # If we got an invalid height, this resets to the previous value.
+        self.main_widget.save_height_line_edit.setText(
+            str(self._save_height))
+        
+        
+    def update_save_dimensions(self):
+        width, height = self.diagram.compute_save_dimensions()
+        self.save_width_set_directly(width)
+        self.save_height_set_directly(height)
+        
+        
+    def update_diagram_coords_text(self, text):
+        self.main_widget.coords_label.setText(text)
 
 
 class MainWidget(QWidget):
@@ -88,7 +180,8 @@ class MainWidget(QWidget):
         else:
             self.signal_type = Qt.QueuedConnection
             
-        self.status = Status()
+        self.diagram = Diagram()
+        self.status = Status(self, self.diagram)
         
         self.init_ui()
         
@@ -246,7 +339,6 @@ class MainWidget(QWidget):
         hbox.addStretch(1)
         vbox.addLayout(hbox)
         
-        self.diagram = Diagram(self.status, self.coords_label)
         vbox.addWidget(self.diagram.canvas)
         
         hbox = QHBoxLayout()
@@ -271,8 +363,29 @@ class MainWidget(QWidget):
         hbox.addWidget(label)
         self.save_dpi_line_edit = QLineEdit()
         self.save_dpi_line_edit.setFixedWidth(char_width*3)
-        self.save_dpi_line_edit.setText("100")
+        self.status.save_dpi_set_directly(100)
+        self.save_dpi_line_edit.editingFinished.connect(
+            self.on_save_dpi_edit, self.signal_type)
         hbox.addWidget(self.save_dpi_line_edit)
+        
+        label = QLabel("Pixels:")
+        label.setToolTip(
+            "Pixel dimensions to use for saving. You can either use this or"
+            "\nthe DPI to specify the image size you want.")
+        hbox.addWidget(label)
+        self.save_width_line_edit = QLineEdit()
+        self.save_width_line_edit.setFixedWidth(char_width*4)
+        self.save_width_line_edit.setText("")
+        self.save_width_line_edit.editingFinished.connect(
+            self.on_save_width_edit, self.signal_type)
+        hbox.addWidget(self.save_width_line_edit)
+        hbox.addWidget(QLabel("x"))
+        self.save_height_line_edit = QLineEdit()
+        self.save_height_line_edit.setFixedWidth(char_width*4)
+        self.save_height_line_edit.setText("")
+        self.save_height_line_edit.editingFinished.connect(
+            self.on_save_height_edit, self.signal_type)
+        hbox.addWidget(self.save_height_line_edit)
         hbox.addStretch(1)
         vbox.addLayout(hbox)
         
@@ -580,14 +693,52 @@ class MainWidget(QWidget):
         self.status.course_code_changed = True
         
         
+    def on_save_dpi_edit(self):
+        self.status.save_dpi_set_from_field()
+        self.status.update_save_dimensions()
+        
+        
+    def on_save_width_edit(self):
+        old_save_width = self.status.save_width
+        self.status.save_width_set_from_field()
+        
+        # If width changed, set DPI and height accordingly.
+        # (Without this check, a non-change could still make the DPI get
+        # re-computed to a different value based on the width, which
+        # would be weird.)
+        if old_save_width != self.status.save_width:
+            # Figure out the save DPI which would get this save width.
+            # Aim for the save width + 0.5 of a pixel, since Matplotlib rounds the
+            # resolution down when saving, and x.0 might get rounded down to x-1
+            # due to imprecision.
+            self.status.save_dpi_set_directly(
+                self.status.dpi
+                * (self.status.save_width + 0.5)
+                / self.diagram.canvas_width())
+            # Update the save height as well.
+            self.status.update_save_dimensions()
+        
+        
+    def on_save_height_edit(self):
+        old_save_height = self.status.save_height
+        self.status.save_height_set_from_field()
+        
+        # If height changed, set DPI and width accordingly.
+        if old_save_height != self.status.save_height:
+            # Figure out the save DPI which would get this save height.
+            # Aim for the save width + 0.5 of a pixel, since Matplotlib rounds the
+            # resolution down when saving, and x.0 might get rounded down to x-1
+            # due to imprecision.
+            self.status.save_dpi_set_directly(
+                self.status.dpi
+                * (self.status.save_height + 0.5)
+                / self.diagram.canvas_height())
+            # Update the save width as well.
+            self.status.update_save_dimensions()
+        
+        
     def on_save_button_click(self):
         self.save_error_label.setText("")
-        
-        try:
-            self.status.save_dpi = float(self.save_dpi_line_edit.text())
-        except ValueError:
-            self.save_error_label.setText("Save DPI must be a number.")
-            return
             
         dialog = QFileDialog(self)
         

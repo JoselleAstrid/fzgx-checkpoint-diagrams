@@ -54,10 +54,7 @@ class Diagram():
     
     zoom_factor = 1.2
     
-    def __init__(self, status, coords_label):
-        
-        self.status = status
-        self.coords_label = coords_label
+    def __init__(self):
         
         self.figure = Figure()
         self.canvas = FigureCanvas(self.figure)
@@ -78,6 +75,7 @@ class Diagram():
         self.drag_position = None
         
         self.rectangle_select_interaction = None
+        self.save_rectangle = None
         self.rect_rubberband = QRubberBand(QRubberBand.Rectangle, self.canvas)
         
         self.canvas.mpl_connect(
@@ -104,6 +102,7 @@ class Diagram():
         self.axes.clear()
         self.draw_checkpoints()
         self.setup_figure()
+        self.status.update_save_dimensions()
         
         # If the course is the same as the last refresh, we'd like to keep the
         # user's current pan and zoom positions.
@@ -152,7 +151,7 @@ class Diagram():
     def motion_notify_event(self, event):
         # Mouse motion
         self.rectangle_select_motion_notify_event(event)
-            
+        
         # If mouse button pressed, pan the figure
         #print(f'Motion: {event.x}, {event.y}')
         if self.drag_position:
@@ -173,7 +172,7 @@ class Diagram():
         else:
             coord_2_str = f'{self.status.axis_2} = {coords[1]:.3f}'
         
-        self.coords_label.setText(f'{coord_1_str}, {coord_2_str}')
+        self.status.update_diagram_coords_text(f'{coord_1_str}, {coord_2_str}')
             
     def scroll_event(self, event):
         # Mousewheel scrolling
@@ -225,6 +224,8 @@ class Diagram():
         # Apply the new axes limits to fix the aspect ratio
         self.axes.set_xlim(axes_hmin, axes_hmax)
         self.axes.set_ylim(axes_vmin, axes_vmax)
+        
+        self.status.update_save_dimensions()
         
         # Rectangle can get wonky after a canvas resize, so just erase it
         self.deactivate_rectangle_select()
@@ -283,15 +284,19 @@ class Diagram():
     def activate_rectangle_select(self):
         self.rect_rubberband.setGeometry(0, 0, 0, 0)
         self.rect_rubberband.show()
-        self.save_rectangle = None
         self.canvas.setCursor(Qt.CrossCursor)
         self.rectangle_select_interaction = 'ready'
         
+        self.save_rectangle = None
+        self.status.update_save_dimensions()
+        
     def deactivate_rectangle_select(self):
         self.rect_rubberband.hide()
-        self.save_rectangle = None
         self.canvas.setCursor(Qt.OpenHandCursor)
         self.rectangle_select_interaction = None
+        
+        self.save_rectangle = None
+        self.status.update_save_dimensions()
         
     def rectangle_select_button_press_event(self, event):
         # Mouse button press
@@ -337,6 +342,7 @@ class Diagram():
         # Mouse button release
         if self.rectangle_select_interaction == 'drawing':
             # Finish the rectangle.
+            self.rectangle_select_interaction = None
             
             # If the mouse is outside of the canvas boundary, snap the
             # rectangle to the boundary
@@ -352,7 +358,7 @@ class Diagram():
                 (self.rectangle_select_origin_x,
                  self.rectangle_select_origin_y),
                 (event_x_bounded, event_y_bounded))
-            self.rectangle_select_interaction = None
+            self.status.update_save_dimensions()
             #print(self.save_rectangle)
         
     def draw_checkpoints(self):
@@ -572,7 +578,23 @@ class Diagram():
         # print(f"axes range sizes: {hrange}, {vrange}")
         # print(f"xlim: {self.axes.get_xlim()}")
         # print(f"ylim: {self.axes.get_ylim()}")
-            
+        
+        
+    def compute_save_dimensions(self):
+        x_inches, y_inches = self.figure.get_size_inches()
+        if self.save_rectangle:
+            canvas_width, canvas_height = self.canvas.get_width_height()
+            save_rectangle_width = (
+                abs(self.save_rectangle[0][0] - self.save_rectangle[1][0]))
+            save_rectangle_height = (
+                abs(self.save_rectangle[0][1] - self.save_rectangle[1][1]))
+            x_inches = x_inches * (save_rectangle_width / canvas_width)
+            y_inches = y_inches * (save_rectangle_height / canvas_height)
+        save_dpi = self.status.save_dpi
+        # Matplotlib seems to round down the resolution to a whole pixel
+        # when saving, so use int() instead of int(round()).
+        return (int(x_inches * save_dpi), int(y_inches * save_dpi))
+        
         
     def save(self, filepath):
         if self.save_rectangle:
